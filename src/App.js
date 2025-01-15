@@ -161,7 +161,7 @@ function App() {
       const data = await response.json();
       const state = data.results[0].components.state;
       const district = data.results[0].components.county;
-      const city = data.results[0].components.city || data.results[0].components.town || data.results[0].components.village;
+      const city = data.results[0].components.town || data.results[0].components.village;
       const location = { state, district, city };
       setLocationDetails(location);
       showToast(`Location: ${district}, ${state}`);
