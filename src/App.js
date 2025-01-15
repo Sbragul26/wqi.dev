@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, Suspense } from "react";
+const RiverMap = React.lazy(() => import('./pages/river_map'));
 
 function App() {
   const [hoveredItem, setHoveredItem] = useState(null);
   const [usrLocation, setUsrLocation] = useState(null);
   const [locationDetails, setLocationDetails] = useState({});
+  const [showMap, setShowMap] = useState(false);
+  const [selectedTab, setSelectedTab] = useState('WQI');
 
   const containerStyle = {
     display: "flex",
@@ -72,6 +75,7 @@ function App() {
 
   const breadcrumbStyle = {
     flexGrow: 1,
+    color: "#3498DB"
   };
 
   const langDropdownStyle = {
@@ -79,14 +83,55 @@ function App() {
     marginLeft: "10px",
   };
 
-  const menuItems = ["Dashboard", "Rankings", "Pollutants", "Predictions", "Settings", "Profile"];
+  const tabContainerStyle = {
+    display: 'flex',
+    backgroundColor: '#333',
+    padding: '10px',
+  };
+
+  const tabStyle = (tab) => ({
+    flex: 1,
+    padding: '10px',
+    textAlign: 'center',
+    color: 'white',
+    cursor: 'pointer',
+    position: 'relative',
+    borderBottom: selectedTab === tab ? '2px solid blue' : 'none',
+  });
+
+  const tabIconStyle = {
+    marginRight: '5px',
+  };
+
+  const handleTabClick = (tab) => {
+    setSelectedTab(tab);
+  };
+
+  const menuItems = ["Dashboard", "Rankings", "Pollutants", "Predictions", "Settings", "Profile", "River Map"];
 
   const showToast = (message) => {
-    const toast = document.getElementById("toast");
+    let toast = document.getElementById("toast");
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.id = "toast";
+      toast.style.position = "fixed";
+      toast.style.bottom = "10px";
+      toast.style.left = "50%";
+      toast.style.transform = "translateX(-50%)";
+      toast.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
+      toast.style.color = "white";
+      toast.style.padding = "10px 20px";
+      toast.style.borderRadius = "5px";
+      toast.style.zIndex = "1000";
+      toast.style.transition = "opacity 0.5s";
+      toast.style.opacity = "0";
+      document.body.appendChild(toast);
+    }
     toast.innerHTML = message;
     toast.className = "show";
+    toast.style.opacity = "1";
     setTimeout(() => {
-      toast.className = toast.className.replace("show", "");
+      toast.style.opacity = "0";
     }, 5000);
   };
 
@@ -129,36 +174,117 @@ function App() {
     fetchLocation();
   };
 
+  const handleMenuItemClick = (item) => {
+    if (item === "River Map") {
+      setShowMap(true);
+    }
+  };
+
   return (
     <div style={containerStyle}>
-      <div id="toast" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", backgroundColor: "#333", color: "#fff", padding: "10px 20px", borderRadius: "5px", visibility: "hidden" }}></div>
-      <div style={leftSectionStyle}>
-        {menuItems.map((item) => (
-          <div
-            key={item}
-            style={menuItemStyle(item)}
-            onMouseEnter={() => setHoveredItem(item)}
-            onMouseLeave={() => setHoveredItem(null)}
-          >
-            {item}
-          </div>
-        ))}
+    <div style={{ ...leftSectionStyle, position: 'relative' }}>
+      <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
+        <img 
+          src="menu_icon.png" 
+          alt="Menu" 
+          style={{ cursor: 'pointer', width: '30px', height: '30px', backgroundColor: '#1E1F3B', padding: '0px', borderRadius: '5px' }}
+        />
+      </div>{/*onClick={handleMenuBarClick} */}
+
+      <div style={{ position: 'absolute', marginTop: '30px', left: '10px' }}>
+        <div style={{fontSize: '22px', color: '#3498DB' }}>
+          Welcome, 
+        </div>
       </div>
+    
+      {menuItems.map((item, index) => (
+      <div
+        key={item}
+        style={{...menuItemStyle(item),...(index === 0 ? { marginTop: '6pc' } : {}),}}
+        onMouseEnter={() => setHoveredItem(item)}
+        onMouseLeave={() => setHoveredItem(null)}
+        onClick={() => handleMenuItemClick(item)}>
+        {item}
+      </div>
+          ))}
+
+          {/*! logo of the wqi.dev*/}
+    
+      <div style={{ textAlign: 'center',position:'fixed', marginTop: '700px' }}>{/*Error may occur in marginTop */}
+        <span style={{ fontSize: '48px', fontWeight: 'bold', color: '#3498DB' }}>
+          W<span style={{ position: 'relative' }}>Q</span>I<span style={{ fontSize: '24px', verticalAlign: 'super' }}>®</span>
+        </span>
+        <div style={{ fontSize: '16px', color: '#3498DB' }}>
+          Real-time River and Reservoir Quality data of India
+        </div>
+      </div>
+    </div>
+
+
+      
       <div style={rightSectionStyle}>
+        <div style ={{ marginTop:'30px' }}>
         <div style={searchBarStyle}>
           <input type="text" placeholder="Search by dam, reservoir, place, city..." style={inputStyle} />
           <img src="loc_pointer.png" alt="Location Icon" style={iconStyle} onClick={handleLocationClick} />
         </div>
-        <div style={breadcrumbContainerStyle}>
-        <div style={breadcrumbStyle}>
-          Dashboard
-          {locationDetails.state ? ` > ${locationDetails.state}` : ""}
-          {locationDetails.state && locationDetails.district ? ` > ${locationDetails.district}` : ""}
-          {locationDetails.state && locationDetails.district && locationDetails.city ? ` > ${locationDetails.city}` : ""}
         </div>
 
+        < div style ={{marginTop: '10px'}}>
+        <div style={breadcrumbContainerStyle}>
+        <div style={breadcrumbStyle}>
+          <span>Dashboard</span>
+          <span style={{ color: 'white' }}>
+            {locationDetails.state ? ` > ${locationDetails.state}` : ""}
+            {locationDetails.state && locationDetails.district ? ` > ${locationDetails.district}` : ""}
+            {locationDetails.state && locationDetails.district && locationDetails.city ? ` > ${locationDetails.city}` : ""}
+          </span>
+        </div>
 
-          <div style={langDropdownStyle}>Lang ▼</div>
+        <div style={langDropdownStyle}>Lang ▼</div>
+        </div>
+        </div>
+
+        <div style ={{marginTop: '35px'}}>
+        <div style={tabContainerStyle}>
+          <div
+            style={tabStyle('Reservoir')}
+            onClick={() => handleTabClick('Reservoir')}
+          >
+            <span style={tabIconStyle}>" "</span> Reservoir
+          </div>
+          <div
+            style={tabStyle('Rivers')}
+            onClick={() => handleTabClick('Rivers')}
+          >
+            <span style={tabIconStyle}>" "</span> Rivers
+          </div>
+          <div
+            style={tabStyle('Ground Water')}
+            onClick={() => handleTabClick('Ground Water')}
+          >
+            <span style={tabIconStyle}>" "</span> Ground Water
+          </div>
+        </div>
+        </div>
+
+        <div style={{ marginTop: '20px' }}>
+          <Suspense fallback={<div>Loading Map...</div>}>
+              <div>
+                {selectedTab === 'Reservoir' && <h1>Reservoir Content</h1>}
+                {selectedTab === 'Rivers' && <h1>Rivers Content</h1>}
+                {selectedTab === 'Ground Water' && <h1>Ground Water Content</h1>}
+              </div>
+          </Suspense>
+        </div>
+        <div>
+          <Suspense fallback={<div></div>}>
+              {showMap ? <RiverMap /> : (
+                <div>
+                  Click River Map..
+                </div>
+              )}
+            </Suspense>
         </div>
 
       </div>
