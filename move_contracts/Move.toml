@@ -1,0 +1,17 @@
+[package]
+name = "prep_trading"
+version = "1.0.0"
+authors = []
+
+[addresses]
+prep_trading = "0xe0f5d08c01462815ff2ae4816eaa6678f77fa26722d4e9ee456acfe966414b45"
+
+
+[dev-addresses]
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-framework.git"
+rev = "mainnet"
+subdir = "aptos-framework"
+
+[dev-dependencies]
