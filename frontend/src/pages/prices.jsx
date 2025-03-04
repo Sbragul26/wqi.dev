@@ -155,12 +155,12 @@ const Prices = () => {
       </div>
       
       {/* Main Content */}
-      <div className="flex-1 p-4 overflow-x-hidden">
+      <div className="flex-1 p-4 overflow-x-hidden ml-80">
         {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-center mb-4">
-          <div className="mb-4 md:mb-0">
+        <div className="flex flex-col md:flex-row justify-between items-center mb-1">
+          <div className="mb-5 md:mb-0">
             <h2 className="text-2xl font-bold">Cryptocurrency Market</h2>
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-gray-400 ml-2 mt-2">
               {loading 
                 ? 'Loading cryptocurrency data...' 
                 : `Live prices and stats for ${data.length} cryptocurrencies • Showing ${paginatedData.length} per page`
@@ -225,7 +225,7 @@ const Prices = () => {
           </div>
         ) : (
           /* Table */
-          <div className="bg-gray-800 rounded-xl overflow-hidden w-full ">
+          <div className="bg-gray-800 rounded-xl overflow-hidden w-[90%] ml-1 mt-15">
             <div className="overflow-x-auto  w-full">
               {filteredData.length === 0 ? (
                 <div className="flex items-center justify-center h-64">

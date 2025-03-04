@@ -1,28 +1,33 @@
-module 0xe0f5d08c01462815ff2ae4816eaa6678f77fa26722d4e9ee456acfe966414b45::prep_trading{
+module my_address::TradingModule {
     use std::signer;
-    use aptos_framework::coin;
     use aptos_framework::aptos_coin;
 
-    // Structure to store position details
-    struct Position has key {
-        owner: address,
-        size: u64,
-        leverage: u8,
+    /// Define a Counter resource that holds a single u64 value
+    struct Counter has key {
+        value: u64,
     }
 
-    // Function to open a leveraged position
-    public entry fun open_position(account: &signer, size: u64, _leverage: u8) {
-        let sender = signer::address_of(account); 
-        let balance = coin::balance<aptos_coin::AptosCoin>(sender);
-        
-        assert!(balance >= size, 100); // Ensure sufficient balance
-        coin::transfer<aptos_coin::AptosCoin>(account, sender, size);
+    /// Initialize the Counter resource in the account
+    public entry fun init_counter(account: &signer) {
+        move_to(account, Counter { value: 0 });
     }
 
-    // Function to close a position
-    public entry fun close_position(account: &signer) {
-        let sender = signer::address_of(account);
-        let size = 1000000; // Closing a fixed-size position
-        coin::transfer<aptos_coin::AptosCoin>(account, sender, size);
+    /// Increment the Counter value by 1
+    public entry fun increment(account: &signer) acquires Counter {
+        let counter = borrow_global_mut<Counter>(signer::address_of(account));
+        counter.value = counter.value + 1;
+    }
+
+    /// Retrieve the current counter value
+    public fun get_value(account: address): u64 acquires Counter {
+        borrow_global<Counter>(account).value
+    }
+
+    /// Mint and deposit AptosCoin into the account
+    public entry fun deposit(account: &signer, amount: u64) {
+        let recipient = signer::address_of(account);
+        aptos_coin::mint(account, recipient, amount);
     }
 }
+
+

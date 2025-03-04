@@ -1,0 +1,7 @@
+{
+    "type": "module",
+    "dependencies": {
+        "@martianwallet/aptos-wallet-adapter": "^0.0.5",
+        "aptos": "^1.21.0"
+    }
+}

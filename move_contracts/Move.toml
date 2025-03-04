@@ -1,10 +1,10 @@
 [package]
-name = "prep_trading"
+name = "TradingModule"
 version = "1.0.0"
-authors = []
+published-at ="0xe0f5d08c01462815ff2ae4816eaa6678f77fa26722d4e9ee456acfe966414b45"
 
 [addresses]
-prep_trading = "0xe0f5d08c01462815ff2ae4816eaa6678f77fa26722d4e9ee456acfe966414b45"
+my_address = "0xe0f5d08c01462815ff2ae4816eaa6678f77fa26722d4e9ee456acfe966414b45"
 
 
 [dev-addresses]

@@ -12,9 +12,9 @@ const News = () => {
   }, []);
 
   return (
-    <div className="bg-gray-900 text-white min-h-screen flex">
+    <div className="bg-gray-900 text-white min-h-screen w-screen flex">
       <Navbar className="w-1/4 min-h-screen bg-gray-800" />
-      <div className="w-3/4 p-6">
+      <div className="w-3/4 p-6 ml-75">
         <h2 className="text-2xl font-bold text-left mb-6">Crypto News</h2>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {news.map((article) => (

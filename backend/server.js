@@ -9,6 +9,7 @@ app.use(cors());
 
 const PORT = process.env.PORT || 8080; // Ensure it runs on 8080
 const CRYPTOPANIC_API_KEY = process.env.CRYPTOPANIC_API_KEY;
+const COINGECKO_API = "https://api.coingecko.com/api/v3/simple/price";
 
 if (!CRYPTOPANIC_API_KEY) {
   console.error("Missing CRYPTOPANIC_API_KEY in environment variables");
@@ -51,6 +52,40 @@ app.get("/api/news", async (req, res) => {
     console.error("Error fetching CryptoPanic news:", error.response?.data || error.message);
     res.status(500).json({ error: "Failed to fetch news data", details: error.response?.data || error.message });
   }
+});
+
+// Route to fetch exchange rates and calculate conversion
+app.get("/convert", async (req, res) => {
+    const from_coin = (req.query.from_coin || "").trim().toLowerCase();
+    const to_coin = (req.query.to_coin || "").trim().toLowerCase();
+    const amount = parseFloat(req.query.amount) || 1.0;
+    
+    if (!from_coin || !to_coin || amount <= 0) {
+        return res.status(400).json({ error: "Invalid parameters" });
+    }
+    
+    try {
+        const response = await axios.get(COINGECKO_API, {
+            params: { ids: `${from_coin},${to_coin}`, vs_currencies: 'usd' }
+        });
+        const data = response.data;
+        
+        if (data[from_coin] && data[to_coin]) {
+            const from_price = data[from_coin].usd;
+            const to_price = data[to_coin].usd;
+            const estimated_receive = (amount * from_price) / to_price;
+            
+            return res.json({
+                from_coin: from_coin.toUpperCase(),
+                to_coin: to_coin.toUpperCase(),
+                amount: amount,
+                estimated_receive: estimated_receive.toFixed(6)
+            });
+        }
+        return res.status(400).json({ error: "Invalid cryptocurrency or API issue" });
+    } catch (error) {
+        return res.status(500).json({ error: "Internal server error" });
+    }
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
