@@ -1,5 +1,4 @@
 # Ignore Folder...
 /backend/node_modules
 /frontend/node_modules
-/.env
-/move_contracts
+
