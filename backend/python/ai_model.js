@@ -1,13 +1,12 @@
 import fetch from "node-fetch";
 import { AptosClient, AptosAccount, TxnBuilderTypes, BCS } from "aptos";
-import readline from "readline";
 
 // Aptos Testnet Settings
 const NODE_URL = "https://fullnode.testnet.aptoslabs.com";
 const client = new AptosClient(NODE_URL);
 
-// AI Trading Account (Replace with your actual private key!)
-const privateKeyHex = "1299d4ba9cd6aaca2dcf1f3b352fdf0446c1c24c6fe148ca61ae6f4489a66575";
+// AI Trading Account
+const privateKeyHex = "1299d4ba9cd6aaca2dcf1f3b352fdf0446c1c24c6fe148ca61ae6f4489a66575"; // Replace with secure storage in production
 const account = AptosAccount.fromAptosAccountObject({ privateKeyHex });
 
 // Contract Details
@@ -15,77 +14,45 @@ const CONTRACT_ADDRESS = "0xe0f5d08c01462815ff2ae4816eaa6678f77fa26722d4e9ee456a
 const MODULE_NAME = "ai_trading_log";
 const FUNCTION_NAME = "log_trade";
 
-// Function to get user input
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-});
-function getUserInput(question) {
-    return new Promise(resolve => rl.question(question, resolve));
-}
-
-// Fetch real-time crypto price
+// Fetch real-time crypto price from CoinGecko
 async function getCryptoPrice(pair) {
     try {
         const symbol = pair.split('/')[0].toLowerCase();
-
-        // Fetch available coin IDs from CoinGecko
         const coinListResponse = await fetch("https://api.coingecko.com/api/v3/coins/list");
         const coinList = await coinListResponse.json();
-
-        // Find the correct ID for the input symbol
         const coinData = coinList.find(coin => coin.symbol.toLowerCase() === symbol);
 
         if (!coinData) {
             console.error(`❌ Crypto not found: ${symbol}`);
-            return "Unavailable";
+            return "0.00";
         }
 
-        console.log(`🔎 Found Coin ID: ${coinData.id}`); // Debugging
-
-        // Fetch the real-time price in USD
         const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coinData.id}&vs_currencies=usd`);
         const data = await response.json();
 
-        if (data[coinData.id] && data[coinData.id].usd) {
-            return data[coinData.id].usd.toFixed(2); // Ensure price is correctly formatted
-        } else {
-            return "Unavailable";
-        }
+        return data[coinData.id]?.usd?.toFixed(2) || "0.00";
     } catch (error) {
         console.error("❌ Error fetching crypto price:", error);
-        return "Unavailable";
+        return "0.00";
     }
 }
 
-
-
-// AI Prediction Function (Simulated API)
+// AI Prediction Function (Simulated - Replace with real AI model)
 async function getTradeSuggestion(pair) {
-    try {
-        console.log("📡 Fetching AI prediction...");
-        const realTimePrice = await getCryptoPrice(pair);
-        
-        const mockAIResponse = {
-            real_time_price: realTimePrice,
-            predicted_price: Math.random() * (60000 - 30000) + 30000, // Random price between 30k-60k
-            suggested_leverage: Math.floor(Math.random() * 10) + 1, // 1x - 10x leverage
-            suggested_order_type: "market",
-            trade_size: (Math.random() * 500).toFixed(2),
-            risk_level: Math.random() > 0.5 ? "High" : "Low"
-        };
-        return mockAIResponse;
-    } catch (error) {
-        console.error("❌ Error fetching AI suggestion:", error);
-        return null;
-    }
+    const realTimePrice = await getCryptoPrice(pair);
+    return {
+        real_time_price: realTimePrice,
+        predicted_price: Math.random() * (60000 - 30000) + 30000, // Simulated prediction
+        suggested_leverage: Math.floor(Math.random() * 10) + 1, // 1x - 10x
+        suggested_order_type: "market",
+        trade_size: (Math.random() * 500).toFixed(2),
+        risk_level: Math.random() > 0.5 ? "High" : "Low"
+    };
 }
 
 // Save AI Action to Aptos Blockchain
 async function saveAIAction(action) {
     try {
-        console.log(`📌 Logging AI Action: ${action}...`);
-
         const entryFunctionPayload = new TxnBuilderTypes.TransactionPayloadEntryFunction(
             TxnBuilderTypes.EntryFunction.natural(
                 `${CONTRACT_ADDRESS}::${MODULE_NAME}`,
@@ -102,85 +69,75 @@ async function saveAIAction(action) {
             TxnBuilderTypes.AccountAddress.fromHex(account.address()),
             sequence_number,
             entryFunctionPayload,
-            BigInt(1000),
-            BigInt(100),
-            BigInt(Math.floor(Date.now() / 1000) + 600),
-            new TxnBuilderTypes.ChainId(2)
+            BigInt(1000), // Max gas units
+            BigInt(100),  // Gas price
+            BigInt(Math.floor(Date.now() / 1000) + 600), // Expiration timestamp
+            new TxnBuilderTypes.ChainId(2) // Testnet chain ID
         );
 
         const bcsTxn = await client.signTransaction(account, rawTxn);
         const txnResponse = await client.submitTransaction(bcsTxn);
         await client.waitForTransaction(txnResponse.hash);
 
-        console.log(`✅ AI Action Saved on Blockchain! Txn Hash: ${txnResponse.hash}`);
         return txnResponse.hash;
     } catch (error) {
         console.error("❌ Error logging AI action:", error);
+        throw error;
     }
 }
 
-// Execute AI-Powered Trade
-async function executeTrade(pair) {
-    const tradeData = await getTradeSuggestion(pair);
-    if (!tradeData) {
-        console.log("Failed to get AI prediction. Exiting...");
-        rl.close();
-        return;
-    }
+// Process trade data from command-line argument
+async function processTrade(tradeData) {
+    try {
+        const pair = tradeData.tradingPair;
+        const tradeSuggestion = await getTradeSuggestion(pair);
 
-    console.log(`\n🔹 Suggested Trade for ${pair}:`);
-    console.log(`🔹 Real-Time Price: ${tradeData.real_time_price} USDT`);
-    console.log(`🔹 Predicted Price: ${tradeData.predicted_price.toFixed(2)} USDT`);
-    console.log(`🔹 Suggested Leverage: ${tradeData.suggested_leverage}x`);
-    console.log(`🔹 Suggested Order Type: ${tradeData.suggested_order_type}`);
-    console.log(`🔹 Trade Size: ${tradeData.trade_size} USDT`);
-    console.log(`🔹 Risk Level: ${tradeData.risk_level}`);
+        // Use form data if provided, otherwise fall back to AI suggestions
+        const leverage = tradeData.leverage?.replace('x', '') || tradeSuggestion.suggested_leverage;
+        const orderType = tradeData.orderType || tradeSuggestion.suggested_order_type;
+        const tradeSize = tradeData.investmentAmount || tradeSuggestion.trade_size;
+        const stopLoss = tradeData.stopLossPrice || (tradeSuggestion.predicted_price * 0.98).toFixed(2);
+        const takeProfit = tradeData.takeProfitPrice || (tradeSuggestion.predicted_price * 1.05).toFixed(2);
+        const tradeDecision = tradeSuggestion.predicted_price > tradeSuggestion.real_time_price ? "LONG" : "SHORT";
 
-    // Get User Confirmation and Customization
-    const confirm = await getUserInput("Do you want to use AI-suggested values? (yes/no): ");
-    let leverage = tradeData.suggested_leverage;
-    let orderType = tradeData.suggested_order_type;
-    let tradeSize = tradeData.trade_size;
-
-    if (confirm.toLowerCase() !== "yes") {
-        leverage = await getUserInput("Enter Leverage (e.g., 5, 10, 20): ");
-        orderType = await getUserInput("Enter Order Type (market/limit): ");
-        tradeSize = await getUserInput("Enter Trade Size (in USDT): ");
-    }
-
-    const stopLoss = tradeData.predicted_price * 0.98;
-    const takeProfit = tradeData.predicted_price * 1.05;
-    const tradeDecision = tradeData.predicted_price > tradeData.real_time_price ? "LONG" : "SHORT";
-
-    console.log(`\n🔹 Final Trade Setup:`);
-    console.log(`🔹 Trade Type: ${tradeDecision}`);
-    console.log(`🔹 Leverage: ${leverage}x`);
-    console.log(`🔹 Order Type: ${orderType}`);
-    console.log(`🔹 Trade Size: ${tradeSize} USDT`);
-    console.log(`🔹 Stop Loss: ${stopLoss.toFixed(2)} USDT`);
-    console.log(`🔹 Take Profit: ${takeProfit.toFixed(2)} USDT`);
-
-    // Ask user if AI should execute
-    const execute = await getUserInput("Proceed with trade execution? (yes/no): ");
-    if (execute.toLowerCase() === "yes") {
         const aiMessage = `Trade: ${tradeDecision}, Leverage: ${leverage}, Order: ${orderType}, Size: ${tradeSize}, SL: ${stopLoss}, TP: ${takeProfit}`;
-        await saveAIAction(aiMessage);
-    } else {
-        console.log("Trade execution canceled.");
-    }
+        const txnHash = await saveAIAction(aiMessage);
 
-    rl.close();
+        // Create a clean, structured JSON output
+        const output = {
+            status: "success",
+            txnHash,
+            tradeDetails: {
+                pair,
+                tradeDecision,
+                leverage,
+                orderType,
+                tradeSize,
+                stopLoss,
+                takeProfit,
+                realTimePrice: tradeSuggestion.real_time_price,
+                predictedPrice: tradeSuggestion.predicted_price.toFixed(2)
+            }
+        };
+
+        // Print JSON directly to stdout for parsing
+        console.log(JSON.stringify(output));
+    } catch (error) {
+        // Print error as JSON
+        console.log(JSON.stringify({
+            status: "error",
+            message: error.message
+        }));
+        process.exit(1);
+    }
 }
 
-// Get User Input and Start Trading
-(async function main() {
-    const aiEnabled = await getUserInput("Enable AI trading? (yes/no): ");
-    if (aiEnabled.toLowerCase() !== "yes") {
-        console.log("AI trading is disabled. Exiting...");
-        rl.close();
-        return;
-    }
+// Main execution
+const tradeDataArg = process.argv[2];
+if (!tradeDataArg) {
+    console.error("No trade data provided");
+    process.exit(1);
+}
 
-    const pair = await getUserInput("Enter the trading pair (e.g., BTC/USDT): ");
-    await executeTrade(pair);
-})();
+const tradeData = JSON.parse(tradeDataArg);
+processTrade(tradeData);

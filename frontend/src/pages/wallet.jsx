@@ -48,7 +48,7 @@ const Wallet = () => {
     <div className="bg-gray-900 min-h-screen w-screen text-white">
       <Navbar /> {/* Added Navbar component */}
 
-      <div className="flex flex-col items-center justify-center min-h-screen">
+      <div className="flex flex-col items-center justify-center min-h-screen ml-55">
         <h1 className="text-3xl font-bold mb-6">Connect Your Wallet</h1>
 
         {hasWallet ? (

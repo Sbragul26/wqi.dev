@@ -2,6 +2,7 @@
     "type": "module",
     "dependencies": {
         "@martianwallet/aptos-wallet-adapter": "^0.0.5",
-        "aptos": "^1.21.0"
+        "aptos": "^1.21.0",
+        "node-fetch": "^3.3.2"
     }
 }
