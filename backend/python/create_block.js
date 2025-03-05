@@ -18,6 +18,10 @@ async function saveAIAction(action) {
     try {
         console.log(`📌 Logging AI Action: ${action}...`);
 
+        // ✅ Get fresh account info to ensure correct sequence number
+        const accountInfo = await client.getAccount(account.address());
+        const sequence_number = BigInt(accountInfo.sequence_number);
+
         // Define the transaction payload using BCS encoding
         const entryFunctionPayload = new TxnBuilderTypes.TransactionPayloadEntryFunction(
             TxnBuilderTypes.EntryFunction.natural(
@@ -28,18 +32,14 @@ async function saveAIAction(action) {
             )
         );
 
-        // ✅ FIX: Get sequence_number correctly
-        const accountInfo = await client.getAccount(account.address());
-        const sequence_number = BigInt(accountInfo.sequence_number);
-
-        // Create raw transaction
+        // ✅ FIX: Increase gas amount to avoid out-of-gas errors
         const rawTxn = new TxnBuilderTypes.RawTransaction(
             TxnBuilderTypes.AccountAddress.fromHex(account.address()),
             sequence_number,
             entryFunctionPayload,
-            BigInt(1000), // max_gas_amount
-            BigInt(100), // gas_unit_price
-            BigInt(Math.floor(Date.now() / 1000) + 600), // expiration_timestamp_secs
+            BigInt(50000), // 🔺 Increased max_gas_amount
+            BigInt(500),   // 🔺 Increased gas_unit_price
+            BigInt(Math.floor(Date.now() / 1000) + 1200), // expiration_timestamp_secs (20 min)
             new TxnBuilderTypes.ChainId(2) // 2 = Testnet Chain ID
         );
 
@@ -55,12 +55,18 @@ async function saveAIAction(action) {
         console.log(`✅ Action Saved to Blockchain: ${txnResponse.hash}`);
         return txnResponse.hash;
     } catch (error) {
-        console.error("❌ Error logging AI action:", error);
+        console.error("❌ Error logging AI action:", error.message || error);
+        
+        // 🔹 Additional Debugging
+        if (error.response) {
+            console.error("🔹 Blockchain Response:", error.response.data);
+        }
     }
 }
 
-// Execute AI trade logging
+// Execute AI trade logging with delays to avoid network congestion
 (async () => {
     await saveAIAction("AI executed a LONG trade with 5x leverage on BTC/USDT");
+    await new Promise(resolve => setTimeout(resolve, 5000)); // ✅ Wait 5s before next transaction
     await saveAIAction("AI closed SHORT position on ETH/USDT");
 })();

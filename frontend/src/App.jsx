@@ -7,7 +7,7 @@ import News from "./pages/news";
 import Exchange from "./pages/exchange";
 import Wallet from "./pages/wallet";
 import Trade from "./pages/trade";
-import Navbar from "./components/navbar"; // Ensure you have a Navbar component
+import Navbar from "./components/navbar"; 
 
 const App = () => {
   return (

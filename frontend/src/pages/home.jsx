@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState} from 'react';
+import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/navbar';
 import Search from '../components/search';
 import Crypto from '../pages/crypto';
@@ -174,6 +175,8 @@ const ConnectWalletButton = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showOptions]);
   
+ 
+  
   return (
     <div className="relative">
       <button 
@@ -211,6 +214,7 @@ const ConnectWalletButton = () => {
 };
 
 const Home = () => {
+  const navigate = useNavigate(); 
   const [rotation, setRotation] = useState(0);
   
   // Animation for the coin semicircle
@@ -221,6 +225,9 @@ const Home = () => {
     
     return () => clearInterval(interval);
   }, []);
+  const handleStartTrading = () => {
+    navigate('/trade'); // Navigate to trade page
+  };
 
   return (
     <div className="w-screen h-screen flex bg-black text-white overflow-hidden ">
@@ -234,7 +241,10 @@ const Home = () => {
           {/* Using ConnectWalletButton instead of plain button */}
           <ConnectWalletButton />
           
-          <button className="bg-green-600 hover:bg-green-700 text-black font-medium py-2 px-4 rounded-lg mr-6">
+           <button 
+            onClick={handleStartTrading} 
+            className="bg-green-600 hover:bg-green-700 text-black font-medium py-2 px-4 rounded-lg mr-6"
+          >
             Start Trading
           </button>
           
