@@ -80,15 +80,15 @@ const WalletPopup = ({ onClose }) => {
       <div className="bg-gray-900 rounded-xl p-8 max-w-md w-full relative">
         {/* Close button */}
         <div className="flex justify-between mb-6">
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
+          <button onClick={onClose} className="text-gray-400 hover:text-black">
             ✖
           </button>
-          <h2 className="text-white text-xl font-bold">Get a Wallet</h2>
+          <h2 className="text-black text-xl font-bold">Get a Wallet</h2>
         </div>
 
         {/* Wallet icons */}
         <div className="flex flex-col items-center mb-8">
-          <p className="text-white text-center mb-8">
+          <p className="text-black text-center mb-8">
             Your wallet is the gateway to all things Web3.
           </p>
 

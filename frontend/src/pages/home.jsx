@@ -147,12 +147,12 @@ const ConnectWalletButton = () => {
       >
         Connect Wallet
       </button>
-      
+
       {showOptions && (
         <div className="wallet-dropdown absolute top-full mt-2 right-0 bg-gray-800 rounded-lg shadow-lg p-2 z-40 w-48">
           <button 
             onClick={connectExistingWallet}
-            className="text-white hover:bg-gray-700 rounded px-4 py-2 w-full text-left"
+            className="text-black hover:bg-gray-700 rounded px-4 py-2 w-full text-left"
           >
             Connect Existing Wallet
           </button>
@@ -161,7 +161,7 @@ const ConnectWalletButton = () => {
               setShowOptions(false);
               setShowPopup(true);
             }}
-            className="text-white hover:bg-gray-700 rounded px-4 py-2 w-full text-left"
+            className="text-black hover:bg-gray-700 rounded px-4 py-2 w-full text-left"
           >
             I Don't Have a Wallet
           </button>
