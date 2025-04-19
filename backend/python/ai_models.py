@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import ccxt
+import numpatuc
 import pandas as pd
 import pandas_ta as ta
 import numpy as np
@@ -12,6 +13,9 @@ import flask_cors
 import subprocess
 import json
 import sys
+
+
+np.NaN = np.nan
 
 app = Flask(__name__)
 flask_cors.CORS(app)
@@ -291,5 +295,5 @@ def process_trade():
             'message': str(e)
         }), 500
 
-if __name__ == '_main_':
+if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000)

@@ -1,22 +1,39 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
 import ccxt
 import pandas as pd
-import pandas_ta as ta
 import numpy as np
-import tensorflow as tf
-from sklearn.preprocessing import MinMaxScaler
 import os
 import threading
 import time
+import json
+import sys
+import subprocess
+from flask_cors import CORS
+
+# Handle TensorFlow import for Python 3.10
+try:
+    import tensorflow as tf
+except ImportError:
+    print("[WARNING] TensorFlow not found, installing...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "tensorflow"])
+    import tensorflow as tf
+
+# Handle scikit-learn import
+try:
+    from sklearn.preprocessing import MinMaxScaler
+except ImportError:
+    print("[WARNING] scikit-learn not found, installing...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "scikit-learn"])
+    from sklearn.preprocessing import MinMaxScaler
+
+# Set Numpy NaN explicitly to fix pandas_ta issue
+np.NaN = np.nan
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)
 
 # Initialize Binance exchange
-exchange = ccxt.binance({
-    'enableRateLimit': True,
-})
+exchange = ccxt.binance()
 timeframe = '1h'
 MODEL_PATH = "lstm_model.keras"
 
@@ -36,26 +53,48 @@ def fetch_data(pair):
         print(f"[ERROR] Failed to fetch data for {pair}: {e}")
         return None
 
-# Add Technical Indicators
+# Add Technical Indicators (without relying on pandas_ta)
 def add_indicators(df):
     try:
-        df['sma'] = ta.sma(df['close'], length=14)
-        df['ema'] = ta.ema(df['close'], length=14)
-        df['rsi'] = ta.rsi(df['close'], length=14)
-
-        macd = ta.macd(df['close'])
-        df['macd'] = macd['MACD_12_26_9']
-        df['macd_signal'] = macd['MACDs_12_26_9']
-        df['macd_hist'] = macd['MACDh_12_26_9']
-
-        bb = ta.bbands(df['close'])
-        df['upper_bb'] = bb['BBU_5_2.0']
-        df['lower_bb'] = bb['BBL_5_2.0']
-
-        adx = ta.adx(df['high'], df['low'], df['close'], length=14)
-        df['adx'] = adx['ADX_14']
-        df['atr'] = ta.atr(df['high'], df['low'], df['close'], length=14)
-
+        # SMA - Simple Moving Average
+        df['sma'] = df['close'].rolling(window=14).mean()
+        
+        # EMA - Exponential Moving Average
+        df['ema'] = df['close'].ewm(span=14, adjust=False).mean()
+        
+        # RSI - Relative Strength Index
+        delta = df['close'].diff()
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        avg_gain = gain.rolling(window=14).mean()
+        avg_loss = loss.rolling(window=14).mean()
+        rs = avg_gain / avg_loss
+        df['rsi'] = 100 - (100 / (1 + rs))
+        
+        # MACD - Moving Average Convergence Divergence
+        ema12 = df['close'].ewm(span=12, adjust=False).mean()
+        ema26 = df['close'].ewm(span=26, adjust=False).mean()
+        df['macd'] = ema12 - ema26
+        df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
+        df['macd_hist'] = df['macd'] - df['macd_signal']
+        
+        # Bollinger Bands
+        sma20 = df['close'].rolling(window=5).mean()
+        std20 = df['close'].rolling(window=5).std()
+        df['upper_bb'] = sma20 + (std20 * 2)
+        df['lower_bb'] = sma20 - (std20 * 2)
+        
+        # ADX - Average Directional Index
+        # This is simplified, a full implementation would be more complex
+        tr1 = abs(df['high'] - df['low'])
+        tr2 = abs(df['high'] - df['close'].shift())
+        tr3 = abs(df['low'] - df['close'].shift())
+        tr = pd.DataFrame([tr1, tr2, tr3]).max()
+        df['atr'] = tr.rolling(window=14).mean()
+        
+        # Simple ADX placeholder (not accurate but provides a value for the model)
+        df['adx'] = ((df['high'] - df['low']) / df['close']).rolling(window=14).mean() * 100
+        
         df.fillna(method='ffill', inplace=True)
         return df
     except Exception as e:
@@ -78,8 +117,14 @@ def load_model():
         print(f"[INFO] Loading model from {MODEL_PATH}...")
         return tf.keras.models.load_model(MODEL_PATH, compile=False)
     else:
-        print("[ERROR] Model not found! Using mock prediction.")
-        return None
+        print(f"[WARNING] Model not found at {MODEL_PATH}! Creating a dummy model for testing...")
+        # Create a simple dummy LSTM model for testing if no model exists
+        model = tf.keras.Sequential([
+            tf.keras.layers.LSTM(50, return_sequences=True, input_shape=(10, 9)),
+            tf.keras.layers.LSTM(50),
+            tf.keras.layers.Dense(1)
+        ])
+        return model
 
 # Initialize the AI model
 model = load_model()
@@ -89,82 +134,90 @@ if model:
 # Predict Future Price
 def predict_price(model, data):
     try:
-        if model is None:
-            # Mock prediction if no model
-            return data[-1][0] * 1.05  # 5% increase
         prediction = model.predict(np.expand_dims(data, axis=0), verbose=0)[0][0]
         return prediction
     except Exception as e:
         print(f"[ERROR] Prediction failed: {e}")
         return None
 
-# API Route for Predictive Values
-@app.route("/api/predictive-values", methods=["GET"])
-def get_predictive_values():
-    pair = request.args.get("pair", "BTC/USDT")
-    print(f"[INFO] Received request for pair: {pair}")
-    
-    valid_pairs = ["BTC/USDT", "ETH/USDT", "APT/USDT", "SOL/USDT", "BNB/USDT"]
-    if pair not in valid_pairs:
-        return jsonify({"error": f"Invalid trading pair. Supported pairs: {valid_pairs}"}), 400
+# AI Trading Loop (Background Process)
+def ai_trading_loop():
+    global AI_RUNNING
 
-    df = fetch_data(pair)
-    if df is None:
-        return jsonify({"error": f"Failed to fetch data for {pair}"}), 500
+    print("[INFO] AI trading bot is initialized but will only trade when enabled.")
 
-    df = add_indicators(df)
-    if df is None:
-        return jsonify({"error": "Failed to compute indicators"}), 500
+    trade_open = False
+    entry_price = None
 
-    processed_data, scaler = preprocess_data(df)
-    if processed_data is None:
-        return jsonify({"error": "Data preprocessing failed"}), 500
+    while True:
+        if not AI_RUNNING:
+            time.sleep(10)  # Check every 10 seconds if AI is turned on
+            continue
 
-    latest_data = processed_data[-10:]
-    predicted_price = predict_price(model, latest_data)
-    if predicted_price is None:
-        return jsonify({"error": "Prediction failed"}), 500
+        try:
+            pair = "BTC/USDT"
+            df = fetch_data(pair)
+            if df is None:
+                print("[ERROR] Failed to fetch data. Skipping this cycle...")
+                time.sleep(60)
+                continue
+            
+            df = add_indicators(df)
+            if df is None:
+                print("[ERROR] Failed to compute indicators. Skipping...")
+                time.sleep(60)
+                continue
 
-    current_price = df['close'].iloc[-1]
-    predicted_price_real = scaler.inverse_transform([[predicted_price] + [0]*8])[0][0]
-    avg_atr = df['atr'].iloc[-10:].mean()
-    
-    if predicted_price_real > current_price:
-        entry_price = current_price
-        stop_loss = current_price - (avg_atr * 1.5)
-        take_profit = predicted_price_real * 1.02
-    else:
-        entry_price = current_price
-        stop_loss = current_price + (avg_atr * 1.5)
-        take_profit = predicted_price_real * 0.98
+            processed_data, scaler = preprocess_data(df)
+            if processed_data is None:
+                print("[ERROR] Data preprocessing failed. Skipping...")
+                time.sleep(60)
+                continue
 
-    response = {
-        "pair": pair,
-        "entryPrice": float(f"{entry_price:.2f}"),
-        "stopLossPrice": float(f"{stop_loss:.2f}"),
-        "takeProfitPrice": float(f"{take_profit:.2f}"),
-        "predictedPrice": float(f"{predicted_price_real:.2f}")
-    }
-    print(f"[INFO] Sending response: {response}")
-    return jsonify(response)
+            latest_data = processed_data[-10:]  # Last 10 time steps for LSTM input
+            predicted_price = predict_price(model, latest_data)
+            if predicted_price is None:
+                print("[ERROR] Prediction failed. Skipping...")
+                time.sleep(60)
+                continue
 
-# Other routes (keeping minimal for focus)
-@app.route("/api/trade", methods=["POST"])
-def submit_trade():
-    data = request.json
-    required_fields = ['tradingPair', 'tradeType', 'orderType', 'investmentAmount']
-    for field in required_fields:
-        if not data.get(field):
-            return jsonify({"error": f"Missing required field: {field}"}), 400
-    
-    response = {
-        "message": "Trade setup completed successfully",
-        "txnHash": f"mock-tx-{int(time.time())}",
-        "tradeDetails": data
-    }
-    print(f"[INFO] Trade submitted: {data}")
-    return jsonify(response)
+            current_price = df['close'].iloc[-1]
 
+            # Dynamic Stop-Loss & Take-Profit Based on Market Volatility
+            avg_atr = df['atr'].iloc[-10:].mean()
+            stop_loss = current_price - (avg_atr * 1.5)  # Dynamic SL based on ATR
+            take_profit = current_price + (avg_atr * 2.5)  # Dynamic TP based on ATR
+
+            # AI Decision Making
+            if not trade_open:
+                if predicted_price > current_price * 1.01:  # Buy if AI expects 1% rise
+                    print(f"[INFO] Buying at {current_price} with SL: {stop_loss:.2f}, TP: {take_profit:.2f}")
+                    trade_open = True
+                    entry_price = current_price
+
+            else:
+                if current_price <= stop_loss:
+                    print("[ALERT] Stop-Loss hit! Closing trade...")
+                    trade_open = False
+                    entry_price = None
+                    time.sleep(60)  # Cooldown before next trade
+
+                elif current_price >= take_profit:
+                    print("[ALERT] Take-Profit reached! Closing trade...")
+                    trade_open = False
+                    entry_price = None
+                    time.sleep(60)  # Cooldown before next trade
+
+            time.sleep(60)  # AI checks every minute
+        except Exception as e:
+            print(f"[ERROR] AI Trading Loop Error: {e}")
+            time.sleep(60)
+
+# Start AI Trading in Background
+ai_thread = threading.Thread(target=ai_trading_loop, daemon=True)
+ai_thread.start()
+
+# API Route to Toggle AI ON/OFF
 @app.route("/toggle_ai", methods=["POST"])
 def toggle_ai():
     global AI_RUNNING
@@ -183,5 +236,126 @@ def toggle_ai():
     
     return jsonify({"error": "Invalid state. Use 'on' or 'off'."}), 400
 
+# API Route for Predictions
+@app.route("/predict", methods=["POST"])
+def predict_endpoint():
+    data = request.json
+    pair = data.get("pair", "BTC/USDT")
+
+    df = fetch_data(pair)
+    if df is None:
+        return jsonify({"error": f"Failed to fetch data for {pair}"}), 500
+
+    df = add_indicators(df)
+    if df is None:
+        return jsonify({"error": "Failed to compute indicators"}), 500
+
+    processed_data, scaler = preprocess_data(df)
+    if processed_data is None:
+        return jsonify({"error": "Data preprocessing failed"}), 500
+
+    latest_data = processed_data[-10:]
+    predicted_price = predict_price(model, latest_data)
+    if predicted_price is None:
+        return jsonify({"error": "Prediction failed"}), 500
+
+    predicted_price_real = scaler.inverse_transform([[predicted_price] + [0]*8])[0][0]
+
+    return jsonify({
+        "pair": pair,
+        "current_price": float(df['close'].iloc[-1]),
+        "predicted_price": float(predicted_price_real)
+    })
+
+# New Trade Processing Route
+@app.route('/api/trade', methods=['POST'])
+def process_trade():
+    try:
+        # Get trade data from the frontend
+        trade_data = request.json
+        
+        # Validate required fields
+        required_fields = ['tradingPair', 'investmentAmount']
+        for field in required_fields:
+            if field not in trade_data or not trade_data[field]:
+                return jsonify({
+                    'status': 'error', 
+                    'message': f'Missing required field: {field}'
+                }), 400
+        
+        # Convert data to JSON string for passing to Node.js script
+        trade_data_json = json.dumps(trade_data)
+        
+        # Path to the Node.js AI trading script
+        script_path = os.path.join(os.path.dirname(__file__), 'ai_model.js')
+        
+        # Check if the Node.js script exists
+        if not os.path.exists(script_path):
+            print(f"[WARNING] Node.js script not found at {script_path}")
+            # Return a mock response for testing
+            return jsonify({
+                'status': 'success',
+                'message': 'Trade simulated (Node.js script not found)',
+                'tradingPair': trade_data.get('tradingPair'),
+                'investmentAmount': trade_data.get('investmentAmount'),
+                'prediction': 'UP',
+                'confidence': 0.85
+            })
+        
+        # Execute the Node.js script with trade data
+        result = subprocess.run(
+            ['node', script_path, trade_data_json],
+            capture_output=True,
+            text=True
+        )
+        
+        # Print full stdout and stderr for debugging
+        print("Full stdout:", result.stdout)
+        print("Full stderr:", result.stderr)
+        
+        # Find the JSON output by looking for the last JSON-like output
+        json_output = None
+        for line in reversed(result.stdout.splitlines()):
+            try:
+                json_output = json.loads(line)
+                break
+            except json.JSONDecodeError:
+                continue
+        
+        if json_output is None:
+            print("No valid JSON output found")
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to parse AI trading script output'
+            }), 500
+        
+        # Process the JSON output
+        if json_output.get('status') == 'success':
+            return jsonify(json_output), 200
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': json_output.get('message', 'Unknown error occurred')
+            }), 500
+    
+    except Exception as e:
+        # Log the full exception details
+        print("Exception occurred:", str(e))
+        print("Exception type:", type(e))
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'status': 'error', 
+            'message': str(e)
+        }), 500
+
+# Add a healthcheck endpoint
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "ok", "message": "Trading Bot API is running"})
+
+# Ensure the entry point uses double underscores
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    print("[INFO] Starting Flask API server for Trading Bot...")
+    app.run(host="0.0.0.0", port=5000)
